@@ -15,7 +15,10 @@ public class ConfigManager {
     private List<String> groqKeys;
     private List<String> deepseekKeys;
     private String trigger;
-    private double spontaneousChance;
+    private double spontaneousChanceMessage;
+    private double spontaneousChanceJoinQuit;
+    private double spontaneousChanceAdvancement;
+    private double spontaneousChanceDeath;
     private int contextSize;
     private int minMessageLength;
     private String systemPrompt;
@@ -53,7 +56,19 @@ public class ConfigManager {
 
         // Загружаем настройки чата
         trigger = config.getString("chat.trigger", "псич");
-        spontaneousChance = config.getDouble("chat.spontaneous-chance", 0.05);
+        // Загружаем отдельные шансы для разных типов событий
+        spontaneousChanceMessage = config.getDouble("chat.spontaneous-chance-message", 0.05);
+        spontaneousChanceJoinQuit = config.getDouble("chat.spontaneous-chance-join-quit", 0.1);
+        spontaneousChanceAdvancement = config.getDouble("chat.spontaneous-chance-advancement", 0.1);
+        spontaneousChanceDeath = config.getDouble("chat.spontaneous-chance-death", 0.1);
+        // Обратная совместимость: если указан старый параметр, используем его для всех
+        if (config.contains("chat.spontaneous-chance") && !config.contains("chat.spontaneous-chance-message")) {
+            double oldChance = config.getDouble("chat.spontaneous-chance", 0.05);
+            spontaneousChanceMessage = oldChance;
+            spontaneousChanceJoinQuit = oldChance;
+            spontaneousChanceAdvancement = oldChance;
+            spontaneousChanceDeath = oldChance;
+        }
         contextSize = config.getInt("chat.context-size", 20);
         minMessageLength = config.getInt("chat.min-message-length", 10);
         nameColor = config.getString("chat.name-color", "yellow");
@@ -110,8 +125,40 @@ public class ConfigManager {
         return trigger;
     }
 
+    /**
+     * @deprecated Используйте getSpontaneousChanceMessage() вместо этого метода
+     */
+    @Deprecated
     public double getSpontaneousChance() {
-        return spontaneousChance;
+        return spontaneousChanceMessage;
+    }
+
+    /**
+     * Возвращает шанс спонтанного ответа на обычные сообщения в чате
+     */
+    public double getSpontaneousChanceMessage() {
+        return spontaneousChanceMessage;
+    }
+
+    /**
+     * Возвращает шанс спонтанного ответа на вход/выход/первый заход игроков
+     */
+    public double getSpontaneousChanceJoinQuit() {
+        return spontaneousChanceJoinQuit;
+    }
+
+    /**
+     * Возвращает шанс спонтанного ответа на получение ачивок игроками
+     */
+    public double getSpontaneousChanceAdvancement() {
+        return spontaneousChanceAdvancement;
+    }
+
+    /**
+     * Возвращает шанс спонтанного ответа на смерти игроков
+     */
+    public double getSpontaneousChanceDeath() {
+        return spontaneousChanceDeath;
     }
 
     public int getContextSize() {

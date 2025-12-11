@@ -84,7 +84,7 @@ public class ChatListener implements Listener {
         } else {
             // Спонтанный ответ с шансом - проверяем асинхронно
             if (message.length() >= plugin.getConfigManager().getMinMessageLength() &&
-                    random.nextDouble() < plugin.getConfigManager().getSpontaneousChance()) {
+                    random.nextDouble() < plugin.getConfigManager().getSpontaneousChanceMessage()) {
 
                 if (plugin.getConfigManager().isDebug()) {
                     plugin.getLogger().info("[DEBUG] Проверка спонтанного ответа для сообщения от " + playerName);

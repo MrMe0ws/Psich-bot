@@ -40,7 +40,7 @@ public class GameEventListener implements Listener {
         String deathMessage = event.getDeathMessage();
 
         // Проверяем шанс реакции на событие
-        if (random.nextDouble() < plugin.getConfigManager().getSpontaneousChance()) {
+        if (random.nextDouble() < plugin.getConfigManager().getSpontaneousChanceDeath()) {
             // Шанс выпал, продолжаем обработку
         } else {
             if (plugin.getConfigManager().isDebug()) {
@@ -128,7 +128,7 @@ public class GameEventListener implements Listener {
         }
 
         // Проверяем шанс реакции на событие
-        if (random.nextDouble() < plugin.getConfigManager().getSpontaneousChance()) {
+        if (random.nextDouble() < plugin.getConfigManager().getSpontaneousChanceAdvancement()) {
             // Шанс выпал, продолжаем обработку
         } else {
             if (plugin.getConfigManager().isDebug()) {
@@ -203,7 +203,7 @@ public class GameEventListener implements Listener {
         boolean isFirstJoin = !event.getPlayer().hasPlayedBefore();
 
         // Проверяем шанс реакции на событие
-        if (random.nextDouble() < plugin.getConfigManager().getSpontaneousChance()) {
+        if (random.nextDouble() < plugin.getConfigManager().getSpontaneousChanceJoinQuit()) {
             // Шанс выпал, продолжаем обработку
         } else {
             if (plugin.getConfigManager().isDebug()) {
@@ -279,7 +279,7 @@ public class GameEventListener implements Listener {
         String chatId = "global";
 
         // Проверяем шанс реакции на событие
-        if (random.nextDouble() < plugin.getConfigManager().getSpontaneousChance()) {
+        if (random.nextDouble() < plugin.getConfigManager().getSpontaneousChanceJoinQuit()) {
             // Шанс выпал, продолжаем обработку
         } else {
             if (plugin.getConfigManager().isDebug()) {
