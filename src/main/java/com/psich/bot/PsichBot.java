@@ -1,6 +1,7 @@
 package com.psich.bot;
 
 import com.psich.bot.commands.PsichCommand;
+import com.psich.bot.integrations.DiscordSRVIntegration;
 import com.psich.bot.integrations.DiscordWebhookIntegration;
 import com.psich.bot.listeners.ChatListener;
 import com.psich.bot.listeners.GameEventListener;
@@ -15,6 +16,7 @@ public class PsichBot extends JavaPlugin {
     private ConfigManager configManager;
     private StorageService storageService;
     private AIManager aiManager;
+    private DiscordSRVIntegration discordSRVIntegration;
     
     @Override
     public void onEnable() {
@@ -37,6 +39,12 @@ public class PsichBot extends JavaPlugin {
         
         // Инициализируем интеграцию с Discord Webhook
         DiscordWebhookIntegration.initialize(this);
+        
+        // Инициализируем интеграцию с DiscordSRV (если установлен)
+        discordSRVIntegration = new DiscordSRVIntegration(this);
+        if (discordSRVIntegration.initialize()) {
+            getLogger().info("Интеграция с DiscordSRV активирована - бот будет отвечать на сообщения из Discord!");
+        }
         
         getLogger().info("Плагин PsichBot успешно загружен!");
     }
