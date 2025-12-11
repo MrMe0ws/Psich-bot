@@ -1,0 +1,23 @@
+{
+  "name": "sych-bot",
+  "version": "1.0.0",
+  "main": "bot.js",
+  
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "axios": "^1.13.2",
+    "dotenv": "^16.6.1",
+    "groq-sdk": "^0.7.0",
+    "lodash.debounce": "^4.0.8",
+    "node-telegram-bot-api": "^0.66.0"
+  },
+  "description": ""
+}

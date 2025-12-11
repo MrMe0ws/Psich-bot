@@ -1,0 +1,22 @@
+name: PsichBot
+version: '${project.version}'
+main: com.psich.bot.PsichBot
+api-version: '1.21'
+author: MrMe0ws
+description: AI бот для общения с игроками в Minecraft
+
+commands:
+  psich:
+    description: Команды управления ботом Псич
+    usage: /<command> [help|mute|reload|reset]
+    permission: psich.use
+    permission-message: У вас нет прав на использование этой команды
+
+permissions:
+  psich.use:
+    description: Базовое право использования команды /psich
+    default: true
+  psich.admin:
+    description: Административные права (mute, reload, reset)
+    default: op
+
