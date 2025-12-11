@@ -63,18 +63,28 @@ public class ChatListener implements Listener {
 
         String cleanText = message.toLowerCase();
         boolean hasTrigger = triggerPattern.matcher(cleanText).find();
+        
+        // Проверяем, нужен ли поиск в интернете (ключевые слова: найди, поищи, гугл)
+        boolean requiresSearch = hasTrigger && (
+            cleanText.contains("найди") || 
+            cleanText.contains("поищи")
+        );
 
         // Если прямое обращение - сразу обрабатываем асинхронно
         if (hasTrigger) {
             if (plugin.getConfigManager().isDebug()) {
                 plugin.getLogger().info("[DEBUG] Прямое обращение к боту от " + playerName + ": " + message);
+                if (requiresSearch) {
+                    plugin.getLogger().info("[DEBUG] Обнаружен запрос на поиск в интернете");
+                }
             }
             // Отвечаем асинхронно
+            final boolean finalRequiresSearch = requiresSearch;
             new BukkitRunnable() {
                 @Override
                 public void run() {
                     try {
-                        processMessage(chatId, playerId, playerName, message, true);
+                        processMessage(chatId, playerId, playerName, message, true, finalRequiresSearch);
                     } catch (Exception e) {
                         plugin.getLogger().severe("Ошибка обработки сообщения: " + e.getMessage());
                         e.printStackTrace();
@@ -132,6 +142,11 @@ public class ChatListener implements Listener {
 
     private void processMessage(String chatId, String playerId, String playerName, String message,
             boolean isDirectlyCalled) {
+        processMessage(chatId, playerId, playerName, message, isDirectlyCalled, false);
+    }
+    
+    private void processMessage(String chatId, String playerId, String playerName, String message,
+            boolean isDirectlyCalled, boolean requiresSearch) {
         try {
             if (plugin.getConfigManager().isDebug()) {
                 plugin.getLogger()
@@ -175,7 +190,8 @@ public class ChatListener implements Listener {
                     processedMessage,
                     playerName,
                     userProfile,
-                    !isDirectlyCalled);
+                    !isDirectlyCalled,
+                    requiresSearch);
 
             if (plugin.getConfigManager().isDebug()) {
                 plugin.getLogger().info("[DEBUG] Получен ответ от AI (длина: "

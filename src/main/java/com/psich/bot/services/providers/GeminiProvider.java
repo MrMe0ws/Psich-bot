@@ -64,6 +64,16 @@ public class GeminiProvider extends BaseProvider {
         generationConfig.addProperty("temperature", options.getTemperature() != null ? options.getTemperature() : 0.9);
         request.add("generationConfig", generationConfig);
         
+        // Добавляем Google Search tool, если нужен поиск
+        if (options.getRequiresSearch() != null && options.getRequiresSearch()) {
+            JsonArray tools = new JsonArray();
+            JsonObject googleSearchTool = new JsonObject();
+            JsonObject googleSearch = new JsonObject();
+            googleSearchTool.add("googleSearch", googleSearch);
+            tools.add(googleSearchTool);
+            request.add("tools", tools);
+        }
+        
         // Отправляем запрос
         OkHttpClient client = HttpClientFactory.createClient(config);
         
@@ -107,7 +117,13 @@ public class GeminiProvider extends BaseProvider {
                 if (candidate.has("content") && candidate.getAsJsonObject("content").has("parts")) {
                     JsonArray responseParts = candidate.getAsJsonObject("content").getAsJsonArray("parts");
                     if (responseParts.size() > 0 && responseParts.get(0).getAsJsonObject().has("text")) {
-                        return responseParts.get(0).getAsJsonObject().get("text").getAsString();
+                        String text = responseParts.get(0).getAsJsonObject().get("text").getAsString();
+                        
+                        // Убираем источники из ответа (не добавляем ссылки в конец)
+                        // В Minecraft версии не нужны источники, чтобы не тратить место в лимите 510 символов
+                        // Источники обычно добавляются через groundingMetadata, но мы их игнорируем
+                        
+                        return text;
                     }
                 }
             }

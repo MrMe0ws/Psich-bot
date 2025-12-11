@@ -186,17 +186,25 @@ public class DiscordSRVIntegration {
         String lowerMessage = actualMessage.toLowerCase();
         boolean hasTrigger = triggerPattern.matcher(lowerMessage).find();
 
+        // Проверяем, нужен ли поиск в интернете (ключевые слова: найди, поищи, гугл)
+        boolean requiresSearch = hasTrigger && (lowerMessage.contains("найди") ||
+                lowerMessage.contains("поищи"));
+
         // Если прямое обращение - обрабатываем
         if (hasTrigger) {
             if (plugin.getConfigManager().isDebug()) {
                 plugin.getLogger()
                         .info("[DEBUG] Прямое обращение к боту из Discord от " + playerName + ": " + actualMessage);
+                if (requiresSearch) {
+                    plugin.getLogger().info("[DEBUG] Обнаружен запрос на поиск в интернете из Discord");
+                }
             }
+            final boolean finalRequiresSearch = requiresSearch;
             new BukkitRunnable() {
                 @Override
                 public void run() {
                     try {
-                        processMessage(chatId, playerId, playerName, actualMessage, true);
+                        processMessage(chatId, playerId, playerName, actualMessage, true, finalRequiresSearch);
                     } catch (Exception e) {
                         plugin.getLogger().severe("Ошибка обработки сообщения из Discord: " + e.getMessage());
                         e.printStackTrace();
@@ -260,6 +268,11 @@ public class DiscordSRVIntegration {
      */
     private void processMessage(String chatId, String playerId, String playerName, String message,
             boolean isDirectlyCalled) {
+        processMessage(chatId, playerId, playerName, message, isDirectlyCalled, false);
+    }
+
+    private void processMessage(String chatId, String playerId, String playerName, String message,
+            boolean isDirectlyCalled, boolean requiresSearch) {
         try {
             if (plugin.getConfigManager().isDebug()) {
                 plugin.getLogger()
@@ -288,7 +301,8 @@ public class DiscordSRVIntegration {
                     processedMessage,
                     playerName,
                     userProfile,
-                    !isDirectlyCalled);
+                    !isDirectlyCalled,
+                    requiresSearch);
 
             if (response == null || response.trim().isEmpty()) {
                 plugin.getLogger().warning("AI вернул пустой ответ на сообщение из Discord");
@@ -327,10 +341,16 @@ public class DiscordSRVIntegration {
                     }
                 }
 
+                // Разбиваем на части по 250 символов (оставляем запас для префикса "[Псич] ")
                 int maxLength = 250;
                 String remaining = fullResponse;
                 int partNumber = 1;
-                int maxParts = 2;
+                int maxParts = 2; // Максимум 2 сообщения
+
+                if (plugin.getConfigManager().isDebug()) {
+                    plugin.getLogger()
+                            .info("[DEBUG] Начало разбиения сообщения (длина: " + fullResponse.length() + " символов)");
+                }
 
                 while (!remaining.isEmpty() && partNumber <= maxParts) {
                     String part;
@@ -338,9 +358,10 @@ public class DiscordSRVIntegration {
                         part = remaining;
                         remaining = "";
                     } else {
+                        // Ищем последний пробел перед лимитом для красивого разрыва
                         int breakPoint = maxLength;
                         int lastSpace = remaining.lastIndexOf(' ', breakPoint);
-                        if (lastSpace > maxLength * 0.7) {
+                        if (lastSpace > maxLength * 0.7) { // Если пробел не слишком далеко
                             breakPoint = lastSpace;
                         }
                         part = remaining.substring(0, breakPoint);
@@ -361,6 +382,18 @@ public class DiscordSRVIntegration {
                         } else {
                             messageToSend = colorCode + "[Псич] §7(продолжение) §f" + part;
                         }
+                    }
+
+                    if (plugin.getConfigManager().isDebug()) {
+                        plugin.getLogger().info("[DEBUG] Отправка сообщения #" + partNumber + " (длина части: "
+                                + part.length() + " символов, общая длина: " + messageToSend.length() + " символов)");
+                    }
+
+                    // Проверяем, не превышает ли сообщение лимит Minecraft (256 символов)
+                    if (messageToSend.length() > 256) {
+                        plugin.getLogger().warning("[WARNING] Сообщение превышает лимит Minecraft (256 символов): "
+                                + messageToSend.length() + " символов. Обрезаем до 256.");
+                        messageToSend = messageToSend.substring(0, 256);
                     }
 
                     // Отправляем в игру

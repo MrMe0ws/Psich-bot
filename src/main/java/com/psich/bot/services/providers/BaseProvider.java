@@ -52,6 +52,7 @@ public abstract class BaseProvider {
         private Integer maxTokens = 2500;
         private Double temperature = 0.9;
         private Boolean expectJson = false;
+        private Boolean requiresSearch = false; // Нужен ли поиск в интернете
         
         public String getSystemPrompt() { return systemPrompt; }
         public void setSystemPrompt(String systemPrompt) { this.systemPrompt = systemPrompt; }
@@ -64,6 +65,9 @@ public abstract class BaseProvider {
         
         public Boolean getExpectJson() { return expectJson; }
         public void setExpectJson(Boolean expectJson) { this.expectJson = expectJson; }
+        
+        public Boolean getRequiresSearch() { return requiresSearch; }
+        public void setRequiresSearch(Boolean requiresSearch) { this.requiresSearch = requiresSearch; }
     }
 }
 

@@ -48,7 +48,7 @@ public class AIManager {
             JavaPlugin.getPlugin(com.psich.bot.PsichBot.class).getLogger()
                     .info("DeepSeek провайдер инициализирован с " + config.getDeepseekKeys().size() + " ключами");
         }
-        
+
         // Логируем статус прокси
         if (config.isProxyEnabled()) {
             JavaPlugin.getPlugin(com.psich.bot.PsichBot.class).getLogger()
@@ -214,6 +214,15 @@ public class AIManager {
             String senderName,
             StorageService.UserProfile userProfile,
             boolean isSpontaneous) throws Exception {
+        return getResponse(history, currentMessage, senderName, userProfile, isSpontaneous, false);
+    }
+
+    public String getResponse(List<StorageService.ChatMessage> history,
+            String currentMessage,
+            String senderName,
+            StorageService.UserProfile userProfile,
+            boolean isSpontaneous,
+            boolean requiresSearch) throws Exception {
         return executeWithFallback((provider) -> {
             // Берем последние 20 сообщений
             List<StorageService.ChatMessage> relevantHistory = history.size() > 20
@@ -243,38 +252,136 @@ public class AIManager {
             }
 
             String systemPrompt = Prompts.getSystemPrompt();
+
+            // Если нужен поиск, добавляем специальную инструкцию о лимите
+            String searchInstruction = "";
+            if (requiresSearch) {
+                searchInstruction = "\n\n!!! КРИТИЧЕСКИ ВАЖНО ДЛЯ ПОИСКА !!!\n" +
+                        "Ты ищешь информацию в интернете через Google Search.\n" +
+                        "Твой ответ ДОЛЖЕН быть КРАТКИМ и уложиться в 500 символов (максимум 2 сообщения по 255 символов в Minecraft).\n"
+                        +
+                        "1. Изложи найденную информацию КРАТКО и по делу.\n" +
+                        "2. НЕ добавляй источники, ссылки, упоминания сайтов - это занимает место.\n" +
+                        "3. НЕ повторяй вопрос пользователя - сразу давай ответ.\n" +
+                        "4. Выбери самое важное из найденного и изложи сжато.\n" +
+                        "5. Если информации много - дай краткую выжимку, самое главное.\n" +
+                        "СТРОГОЕ ОГРАНИЧЕНИЕ: максимум 500 символов (2 сообщения по 255). Адаптируй найденную информацию под этот лимит.\n";
+            }
+
             String fullPrompt = Prompts.getMainChatPrompt(
                     isSpontaneous,
                     currentMessage,
                     contextStr,
                     personalInfo,
-                    senderName);
+                    senderName) + searchInstruction;
 
             BaseProvider.GenerateOptions options = new BaseProvider.GenerateOptions();
             options.setSystemPrompt(systemPrompt);
-            options.setMaxTokens(2500);
+            // Ограничиваем токены для поиска, чтобы ответ не превышал 510 символов
+            options.setMaxTokens(requiresSearch ? 400 : 2500);
             options.setTemperature(0.9);
+            options.setRequiresSearch(requiresSearch);
 
             // Для Groq и DeepSeek используем системный промпт в опциях
             if (provider.getName().equals("Groq") || provider.getName().equals("DeepSeek")) {
-                return provider.generate(fullPrompt, options);
+                String result = provider.generate(fullPrompt, options);
+                // Если AI не уложился в лимит, обрезаем (но лучше чтобы AI сам адаптировался)
+                if (requiresSearch && result.length() > 510) {
+                    // Пытаемся обрезать по последнему пробелу, чтобы не резать слово
+                    int cutPoint = 507;
+                    int lastSpace = result.lastIndexOf(' ', cutPoint);
+                    if (lastSpace > 450) { // Если пробел не слишком далеко
+                        cutPoint = lastSpace;
+                    }
+                    result = result.substring(0, cutPoint) + "...";
+                }
+                return result;
             }
 
             // Для Gemini добавляем системный промпт в начало
             String finalPrompt = systemPrompt + "\n\n" + fullPrompt;
             options.setSystemPrompt(null);
-            return provider.generate(finalPrompt, options);
-        }, false, false);
+            String result = provider.generate(finalPrompt, options);
+            // Если AI не уложился в лимит, обрезаем (но лучше чтобы AI сам адаптировался)
+            if (requiresSearch && result.length() > 510) {
+                // Пытаемся обрезать по последнему пробелу, чтобы не резать слово
+                int cutPoint = 507;
+                int lastSpace = result.lastIndexOf(' ', cutPoint);
+                if (lastSpace > 450) { // Если пробел не слишком далеко
+                    cutPoint = lastSpace;
+                }
+                result = result.substring(0, cutPoint) + "...";
+            }
+            return result;
+        }, false, requiresSearch);
+    }
+
+    /**
+     * Выбирает простой (дешевый) провайдер для легких задач (YES/NO, реакции и
+     * т.д.)
+     * Приоритет: Gemma > Groq-Simple > Groq > Gemini > DeepSeek
+     */
+    private BaseProvider selectSimpleProvider() {
+        // Для простых задач используем дешевые модели сначала
+        String[] simplePriorityOrder = { "Gemma", "Groq-Simple", "Groq", "Gemini", "DeepSeek" };
+
+        for (String priorityName : simplePriorityOrder) {
+            for (BaseProvider provider : providers) {
+                if (provider.getName().equals(priorityName) && provider.isAvailable()) {
+                    return provider;
+                }
+            }
+        }
+
+        // Если ничего не нашли, берем любой доступный
+        return providers.stream()
+                .filter(BaseProvider::isAvailable)
+                .findFirst()
+                .orElse(null);
     }
 
     public boolean shouldAnswer(String historyBlock) throws Exception {
-        String result = executeWithFallback((provider) -> {
+        // Для простых задач (YES/NO) используем дешевые модели сначала
+        BaseProvider simpleProvider = selectSimpleProvider();
+
+        if (simpleProvider == null) {
+            throw new Exception("Нет доступных AI провайдеров");
+        }
+
+        if (config.isDebug()) {
+            JavaPlugin.getPlugin(com.psich.bot.PsichBot.class).getLogger()
+                    .info("[DEBUG] Выбран простой провайдер для shouldAnswer: " + simpleProvider.getName());
+        }
+
+        try {
             String prompt = Prompts.getShouldAnswerPrompt(historyBlock);
             BaseProvider.GenerateOptions options = new BaseProvider.GenerateOptions();
             options.setMaxTokens(10);
-            return provider.generate(prompt, options);
-        }, false, false);
-        return result.toUpperCase().contains("YES");
+            String result = simpleProvider.generate(prompt, options);
+
+            if (config.isDebug()) {
+                JavaPlugin.getPlugin(com.psich.bot.PsichBot.class).getLogger()
+                        .info("[DEBUG] shouldAnswer ответ: " + result);
+            }
+
+            return result.toUpperCase().contains("YES");
+        } catch (Exception error) {
+            // Если простой провайдер не сработал, пробуем через fallback
+            if (config.isDebug()) {
+                JavaPlugin.getPlugin(com.psich.bot.PsichBot.class).getLogger()
+                        .warning("[DEBUG] Простой провайдер " + simpleProvider.getName()
+                                + " не сработал, используем fallback: " + error.getMessage());
+            }
+
+            // Fallback на обычный метод
+            String result = executeWithFallback((provider) -> {
+                String prompt = Prompts.getShouldAnswerPrompt(historyBlock);
+                BaseProvider.GenerateOptions options = new BaseProvider.GenerateOptions();
+                options.setMaxTokens(10);
+                return provider.generate(prompt, options);
+            }, false, false);
+            return result.toUpperCase().contains("YES");
+        }
     }
 
     public StorageService.UserProfile analyzeUserImmediate(String lastMessages,
