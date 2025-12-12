@@ -63,12 +63,10 @@ public class ChatListener implements Listener {
 
         String cleanText = message.toLowerCase();
         boolean hasTrigger = triggerPattern.matcher(cleanText).find();
-        
+
         // Проверяем, нужен ли поиск в интернете (ключевые слова: найди, поищи, гугл)
-        boolean requiresSearch = hasTrigger && (
-            cleanText.contains("найди") || 
-            cleanText.contains("поищи")
-        );
+        boolean requiresSearch = hasTrigger && (cleanText.contains("найди") ||
+                cleanText.contains("поищи"));
 
         // Если прямое обращение - сразу обрабатываем асинхронно
         if (hasTrigger) {
@@ -144,7 +142,105 @@ public class ChatListener implements Listener {
             boolean isDirectlyCalled) {
         processMessage(chatId, playerId, playerName, message, isDirectlyCalled, false);
     }
-    
+
+    /**
+     * Отправляет части сообщения с задержками через runTaskLater (не блокирует
+     * главный поток)
+     * 
+     * @param chatId       ID чата
+     * @param fullResponse Полный ответ для отправки
+     * @param startIndex   Индекс символа, с которого начинать отправку
+     * @param partNumber   Номер части (начинается с 1)
+     */
+    private void sendMessageParts(String chatId, String fullResponse, int startIndex, int partNumber) {
+        final int maxLength = 250;
+        final int maxParts = 2; // Максимум 2 сообщения
+
+        if (partNumber > maxParts || startIndex >= fullResponse.length()) {
+            // Все части отправлены, сохраняем в историю
+            plugin.getStorageService().addToHistory(chatId, "Псич", fullResponse);
+            return;
+        }
+
+        // Берем следующую часть
+        String remaining = fullResponse.substring(startIndex);
+        String part;
+        int nextStartIndex;
+
+        if (remaining.length() <= maxLength) {
+            part = remaining;
+            nextStartIndex = fullResponse.length(); // Все отправлено
+        } else {
+            // Ищем последний пробел перед лимитом для красивого разрыва
+            int breakPoint = maxLength;
+            int lastSpace = remaining.lastIndexOf(' ', breakPoint);
+            if (lastSpace > maxLength * 0.7) { // Если пробел не слишком далеко
+                breakPoint = lastSpace;
+            }
+            part = remaining.substring(0, breakPoint);
+            nextStartIndex = startIndex + breakPoint;
+        }
+
+        // Формируем сообщение
+        String colorCode = plugin.getConfigManager().getNameColorCode();
+        String messageToSend;
+        if (plugin.getConfigManager().isSendAsPlayer()) {
+            // Формат игрока: <Псич> сообщение
+            if (partNumber == 1) {
+                messageToSend = colorCode + "<Псич> §f" + part;
+            } else {
+                messageToSend = colorCode + "<Псич> §7(продолжение) §f" + part;
+            }
+        } else {
+            // Формат консоли: [Псич] сообщение
+            if (partNumber == 1) {
+                messageToSend = colorCode + "[Псич] §f" + part;
+            } else {
+                messageToSend = colorCode + "[Псич] §7(продолжение) §f" + part;
+            }
+        }
+
+        // Отправляем сообщение в игру
+        plugin.getServer().broadcastMessage(messageToSend);
+
+        // Отправляем сообщение в Discord через Webhook (если настроено)
+        if (plugin.getConfigManager().isDiscordEnabled()
+                && !plugin.getConfigManager().getDiscordWebhookUrl().isEmpty()) {
+            // Убираем цветовые коды Minecraft для Discord
+            String cleanMessage = messageToSend.replaceAll("§[0-9a-fk-or]", "");
+            // Убираем префикс "<Псич>" или "[Псич]" из сообщения для Discord
+            final String discordMessage = cleanMessage.replaceAll("^\\s*[<\\[]Псич[>\\]]\\s*", "")
+                    .trim();
+            // Отправляем в Discord асинхронно
+            plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+                DiscordWebhookIntegration.sendMessage(
+                        plugin.getConfigManager().getDiscordWebhookUrl(),
+                        discordMessage,
+                        plugin.getConfigManager().getDiscordUsername(),
+                        plugin.getConfigManager().getDiscordAvatarUrl());
+            });
+        }
+
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[DEBUG] Отправлено сообщение #" + partNumber + " (длина: "
+                    + part.length() + " символов)");
+        }
+
+        // Если есть еще части для отправки, планируем следующую с задержкой 2 тика
+        // (100мс)
+        if (nextStartIndex < fullResponse.length() && partNumber < maxParts) {
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    sendMessageParts(chatId, fullResponse, nextStartIndex, partNumber + 1);
+                }
+            }.runTaskLater(plugin, 2); // 2 тика = 100мс при 20 TPS
+        } else {
+            // Все части отправлены, сохраняем в историю
+            plugin.getStorageService().addToHistory(chatId, "Псич", fullResponse);
+        }
+    }
+
     private void processMessage(String chatId, String playerId, String playerName, String message,
             boolean isDirectlyCalled, boolean requiresSearch) {
         try {
@@ -208,101 +304,16 @@ public class ChatListener implements Listener {
             final String fullResponse = response;
             final double delaySeconds = plugin.getConfigManager().getResponseDelay();
 
+            // Вычисляем задержку в тиках (1 секунда = 20 тиков при 20 TPS)
+            long delayTicks = delaySeconds > 0 ? (long) (delaySeconds * 20) : 0;
+
+            // Используем runTaskLater для задержки вместо Thread.sleep
             new BukkitRunnable() {
                 @Override
                 public void run() {
-                    // Задержка перед отправкой для более естественного поведения
-                    if (delaySeconds > 0) {
-                        try {
-                            Thread.sleep((long) (delaySeconds * 1000));
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            return;
-                        }
-                    }
-                    // Разбиваем на части по 250 символов (оставляем запас для префикса "[Псич] ")
-                    int maxLength = 250;
-                    String remaining = fullResponse;
-                    int partNumber = 1;
-                    int maxParts = 2; // Максимум 2 сообщения
-
-                    while (!remaining.isEmpty() && partNumber <= maxParts) {
-                        String part;
-                        if (remaining.length() <= maxLength) {
-                            part = remaining;
-                            remaining = "";
-                        } else {
-                            // Ищем последний пробел перед лимитом для красивого разрыва
-                            int breakPoint = maxLength;
-                            int lastSpace = remaining.lastIndexOf(' ', breakPoint);
-                            if (lastSpace > maxLength * 0.7) { // Если пробел не слишком далеко
-                                breakPoint = lastSpace;
-                            }
-                            part = remaining.substring(0, breakPoint);
-                            remaining = remaining.substring(breakPoint).trim();
-                        }
-
-                        // Отправляем часть
-                        String colorCode = plugin.getConfigManager().getNameColorCode();
-                        String messageToSend;
-                        if (plugin.getConfigManager().isSendAsPlayer()) {
-                            // Формат игрока: <Псич> сообщение
-                            if (partNumber == 1) {
-                                messageToSend = colorCode + "<Псич> §f" + part;
-                            } else {
-                                messageToSend = colorCode + "<Псич> §7(продолжение) §f" + part;
-                            }
-                        } else {
-                            // Формат консоли: [Псич] сообщение
-                            if (partNumber == 1) {
-                                messageToSend = colorCode + "[Псич] §f" + part;
-                            } else {
-                                messageToSend = colorCode + "[Псич] §7(продолжение) §f" + part;
-                            }
-                        }
-
-                        // Отправляем сообщение в игру
-                        plugin.getServer().broadcastMessage(messageToSend);
-
-                        // Отправляем сообщение в Discord через Webhook (если настроено)
-                        if (plugin.getConfigManager().isDiscordEnabled()
-                                && !plugin.getConfigManager().getDiscordWebhookUrl().isEmpty()) {
-                            // Убираем цветовые коды Minecraft для Discord
-                            String cleanMessage = messageToSend.replaceAll("§[0-9a-fk-or]", "");
-                            // Убираем префикс "<Псич>" или "[Псич]" из сообщения для Discord
-                            final String discordMessage = cleanMessage.replaceAll("^\\s*[<\\[]Псич[>\\]]\\s*", "")
-                                    .trim();
-                            // Отправляем в Discord асинхронно
-                            plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
-                                DiscordWebhookIntegration.sendMessage(
-                                        plugin.getConfigManager().getDiscordWebhookUrl(),
-                                        discordMessage,
-                                        plugin.getConfigManager().getDiscordUsername(),
-                                        plugin.getConfigManager().getDiscordAvatarUrl());
-                            });
-                        }
-
-                        if (plugin.getConfigManager().isDebug()) {
-                            plugin.getLogger().info("[DEBUG] Отправлено сообщение #" + partNumber + " (длина: "
-                                    + part.length() + " символов)");
-                        }
-                        partNumber++;
-
-                        // Небольшая задержка между сообщениями
-                        if (!remaining.isEmpty()) {
-                            try {
-                                Thread.sleep(100); // 100мс задержка
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                                break;
-                            }
-                        }
-                    }
-
-                    // Сохраняем полный ответ в историю
-                    plugin.getStorageService().addToHistory(chatId, "Псич", fullResponse);
+                    sendMessageParts(chatId, fullResponse, 0, 1);
                 }
-            }.runTask(plugin);
+            }.runTaskLater(plugin, delayTicks);
 
             // Анализируем репутацию игрока
             List<StorageService.ChatMessage> recentHistory = history.size() > 5
