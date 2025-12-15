@@ -129,6 +129,11 @@ public class AIManager {
                     errorMsg.contains("limit") ||
                     errorMsg.contains("402") ||
                     errorMsg.contains("Insufficient");
+            boolean isProxyError = errorMsg != null && (errorMsg.contains("Proxy error") ||
+                    errorMsg.contains("403") && errorMsg.contains("CONNECT") ||
+                    errorMsg.contains("Connection refused") ||
+                    errorMsg.contains("timeout") ||
+                    errorMsg.contains("Network error"));
 
             // Логируем только краткое сообщение об ошибке
             if (config.isDebug()) {
@@ -137,12 +142,13 @@ public class AIManager {
             } else if (isQuotaExhausted) {
                 JavaPlugin.getPlugin(com.psich.bot.PsichBot.class).getLogger()
                         .warning(preferredProvider.getName() + " исчерпал лимит");
+            } else if (isProxyError) {
+                // Если ошибка прокси - логируем только один раз, чтобы не спамить
+                JavaPlugin.getPlugin(com.psich.bot.PsichBot.class).getLogger()
+                        .warning(preferredProvider.getName() + " ошибка прокси/сети");
             } else {
-                // Показываем только если это не ошибка прокси (чтобы не спамить)
-                if (!errorMsg.contains("Proxy error") && !errorMsg.contains("403") && !errorMsg.contains("CONNECT")) {
-                    JavaPlugin.getPlugin(com.psich.bot.PsichBot.class).getLogger()
-                            .warning(preferredProvider.getName() + " недоступен");
-                }
+                JavaPlugin.getPlugin(com.psich.bot.PsichBot.class).getLogger()
+                        .warning(preferredProvider.getName() + " недоступен");
             }
 
             // Пробуем других провайдеров (сначала основные, потом простые, DeepSeek в
@@ -176,6 +182,12 @@ public class AIManager {
                         }
                         return result;
                     } catch (Exception fallbackError) {
+                        String fallbackErrorMsg = fallbackError.getMessage();
+                        if (config.isDebug()) {
+                            JavaPlugin.getPlugin(com.psich.bot.PsichBot.class).getLogger()
+                                    .warning("[DEBUG] " + provider.getName() + " (fallback) ошибка: "
+                                            + fallbackErrorMsg);
+                        }
                         continue;
                     }
                 }
@@ -200,12 +212,32 @@ public class AIManager {
                         }
                         return task.execute(provider);
                     } catch (Exception fallbackError) {
+                        String fallbackErrorMsg = fallbackError.getMessage();
+                        if (config.isDebug()) {
+                            JavaPlugin.getPlugin(com.psich.bot.PsichBot.class).getLogger()
+                                    .warning("[DEBUG] " + provider.getName() + " (последний fallback) ошибка: "
+                                            + fallbackErrorMsg);
+                        }
                         continue;
                     }
                 }
             }
 
-            throw new Exception("Все AI провайдеры исчерпали лимиты или недоступны");
+            // Собираем информацию о том, почему провайдеры упали
+            StringBuilder errorDetails = new StringBuilder("Все AI провайдеры недоступны. ");
+
+            if (isQuotaExhausted) {
+                errorDetails.append("Основной провайдер (").append(preferredProvider.getName())
+                        .append(") исчерпал лимит запросов (429). ");
+            }
+            if (isProxyError && config.isProxyEnabled()) {
+                errorDetails.append("Обнаружены ошибки прокси/сети. ");
+                errorDetails.append("Проверьте настройки прокси: ").append(config.getProxyHost())
+                        .append(":").append(config.getProxyPort()).append(". ");
+            }
+            errorDetails.append("Попробуйте позже или проверьте настройки API ключей и прокси.");
+
+            throw new Exception(errorDetails.toString());
         }
     }
 
@@ -268,12 +300,14 @@ public class AIManager {
                         "СТРОГОЕ ОГРАНИЧЕНИЕ: максимум 500 символов (2 сообщения по 255). Адаптируй найденную информацию под этот лимит.\n";
             }
 
+            String botName = config.getBotName();
             String fullPrompt = Prompts.getMainChatPrompt(
                     isSpontaneous,
                     currentMessage,
                     contextStr,
                     personalInfo,
-                    senderName) + searchInstruction;
+                    senderName,
+                    botName) + searchInstruction;
 
             BaseProvider.GenerateOptions options = new BaseProvider.GenerateOptions();
             options.setSystemPrompt(systemPrompt);
@@ -354,7 +388,8 @@ public class AIManager {
         }
 
         try {
-            String prompt = Prompts.getShouldAnswerPrompt(historyBlock);
+            String botName = config.getBotName();
+            String prompt = Prompts.getShouldAnswerPrompt(historyBlock, botName);
             BaseProvider.GenerateOptions options = new BaseProvider.GenerateOptions();
             options.setMaxTokens(10);
             String result = simpleProvider.generate(prompt, options);
@@ -374,8 +409,9 @@ public class AIManager {
             }
 
             // Fallback на обычный метод
+            String botName = config.getBotName();
             String result = executeWithFallback((provider) -> {
-                String prompt = Prompts.getShouldAnswerPrompt(historyBlock);
+                String prompt = Prompts.getShouldAnswerPrompt(historyBlock, botName);
                 BaseProvider.GenerateOptions options = new BaseProvider.GenerateOptions();
                 options.setMaxTokens(10);
                 return provider.generate(prompt, options);

@@ -157,9 +157,10 @@ public class DiscordSRVIntegration {
         String chatId = "global";
 
         // Игнорируем сообщения от бота
+        String botName = plugin.getConfigManager().getBotName();
         String cleanMessage = message.replaceAll("§[0-9a-fk-or]", "");
-        if (cleanMessage.startsWith("[Псич]") || cleanMessage.startsWith("<Псич>")) {
-            plugin.getStorageService().addToHistory(chatId, "Псич", message);
+        if (cleanMessage.startsWith("[" + botName + "]") || cleanMessage.startsWith("<" + botName + ">")) {
+            plugin.getStorageService().addToHistory(chatId, botName, message);
             return;
         }
 
@@ -290,9 +291,10 @@ public class DiscordSRVIntegration {
 
             // Если сообщение только триггер, добавляем контекст
             String processedMessage = message;
+            String botName = plugin.getConfigManager().getBotName();
             if (message.trim().equalsIgnoreCase(plugin.getConfigManager().getTrigger()) ||
                     message.trim().equalsIgnoreCase("psych")) {
-                processedMessage = "Псич, привет! Что нужно?";
+                processedMessage = botName + ", привет! Что нужно?";
             }
 
             // Генерируем ответ
@@ -313,7 +315,7 @@ public class DiscordSRVIntegration {
             sendResponse(chatId, response);
 
             // Сохраняем ответ в историю
-            plugin.getStorageService().addToHistory(chatId, "Псич", response);
+            plugin.getStorageService().addToHistory(chatId, plugin.getConfigManager().getBotName(), response);
 
         } catch (Exception e) {
             plugin.getLogger().severe("Критическая ошибка AI при обработке сообщения из Discord: " + e.getMessage());
@@ -378,20 +380,13 @@ public class DiscordSRVIntegration {
         }
 
         // Формируем сообщение
+        String botName = plugin.getConfigManager().getBotName();
         String colorCode = plugin.getConfigManager().getNameColorCode();
         String messageToSend;
         if (plugin.getConfigManager().isSendAsPlayer()) {
-            if (partNumber == 1) {
-                messageToSend = colorCode + "<Псич> §f" + part;
-            } else {
-                messageToSend = colorCode + "<Псич> §7(продолжение) §f" + part;
-            }
+            messageToSend = colorCode + "<" + botName + "> §f" + part;
         } else {
-            if (partNumber == 1) {
-                messageToSend = colorCode + "[Псич] §f" + part;
-            } else {
-                messageToSend = colorCode + "[Псич] §7(продолжение) §f" + part;
-            }
+            messageToSend = colorCode + "[" + botName + "] §f" + part;
         }
 
         if (plugin.getConfigManager().isDebug()) {
@@ -413,7 +408,9 @@ public class DiscordSRVIntegration {
         if (plugin.getConfigManager().isDiscordEnabled()
                 && !plugin.getConfigManager().getDiscordWebhookUrl().isEmpty()) {
             String cleanMessage = messageToSend.replaceAll("§[0-9a-fk-or]", "");
-            final String discordMessage = cleanMessage.replaceAll("^\\s*[<\\[]Псич[>\\]]\\s*", "").trim();
+            String botNameEscaped = botName.replaceAll("[\\[\\]<>]", "\\\\$0"); // Экранируем для regex
+            final String discordMessage = cleanMessage.replaceAll("^\\s*[<\\[]" + botNameEscaped + "[>\\]]\\s*", "")
+                    .trim();
             plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
                 DiscordWebhookIntegration.sendMessage(
                         plugin.getConfigManager().getDiscordWebhookUrl(),

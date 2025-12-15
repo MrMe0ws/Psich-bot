@@ -42,13 +42,14 @@ public class ChatListener implements Listener {
         if (message == null || message.trim().isEmpty())
             return;
 
-        // Игнорируем сообщения, которые начинаются с "[Псич]" или "<Псич>" - это
+        // Игнорируем сообщения, которые начинаются с "[Имя]" или "<Имя>" - это
         // сообщения от самого бота
         // Это предотвращает бесконечные ответы самому себе
+        String botName = plugin.getConfigManager().getBotName();
         String cleanMessageForCheck = message.replaceAll("§[0-9a-fk-or]", ""); // Убираем цветовые коды для проверки
-        if (cleanMessageForCheck.startsWith("[Псич]") || cleanMessageForCheck.startsWith("<Псич>")) {
+        if (cleanMessageForCheck.startsWith("[" + botName + "]") || cleanMessageForCheck.startsWith("<" + botName + ">")) {
             // Это сообщение от бота, сохраняем в историю, но не обрабатываем триггер
-            plugin.getStorageService().addToHistory(chatId, "Псич", message);
+            plugin.getStorageService().addToHistory(chatId, botName, message);
             return; // Не обрабатываем сообщения от самого бота
         }
 
@@ -158,7 +159,7 @@ public class ChatListener implements Listener {
 
         if (partNumber > maxParts || startIndex >= fullResponse.length()) {
             // Все части отправлены, сохраняем в историю
-            plugin.getStorageService().addToHistory(chatId, "Псич", fullResponse);
+            plugin.getStorageService().addToHistory(chatId, plugin.getConfigManager().getBotName(), fullResponse);
             return;
         }
 
@@ -182,22 +183,15 @@ public class ChatListener implements Listener {
         }
 
         // Формируем сообщение
+        String botName = plugin.getConfigManager().getBotName();
         String colorCode = plugin.getConfigManager().getNameColorCode();
         String messageToSend;
         if (plugin.getConfigManager().isSendAsPlayer()) {
-            // Формат игрока: <Псич> сообщение
-            if (partNumber == 1) {
-                messageToSend = colorCode + "<Псич> §f" + part;
-            } else {
-                messageToSend = colorCode + "<Псич> §7(продолжение) §f" + part;
-            }
+            // Формат игрока: <Имя> сообщение
+            messageToSend = colorCode + "<" + botName + "> §f" + part;
         } else {
-            // Формат консоли: [Псич] сообщение
-            if (partNumber == 1) {
-                messageToSend = colorCode + "[Псич] §f" + part;
-            } else {
-                messageToSend = colorCode + "[Псич] §7(продолжение) §f" + part;
-            }
+            // Формат консоли: [Имя] сообщение
+            messageToSend = colorCode + "[" + botName + "] §f" + part;
         }
 
         // Отправляем сообщение в игру
@@ -208,8 +202,9 @@ public class ChatListener implements Listener {
                 && !plugin.getConfigManager().getDiscordWebhookUrl().isEmpty()) {
             // Убираем цветовые коды Minecraft для Discord
             String cleanMessage = messageToSend.replaceAll("§[0-9a-fk-or]", "");
-            // Убираем префикс "<Псич>" или "[Псич]" из сообщения для Discord
-            final String discordMessage = cleanMessage.replaceAll("^\\s*[<\\[]Псич[>\\]]\\s*", "")
+            // Убираем префикс "<Имя>" или "[Имя]" из сообщения для Discord
+            String botNameEscaped = botName.replaceAll("[\\[\\]<>]", "\\\\$0"); // Экранируем для regex
+            final String discordMessage = cleanMessage.replaceAll("^\\s*[<\\[]" + botNameEscaped + "[>\\]]\\s*", "")
                     .trim();
             // Отправляем в Discord асинхронно
             plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -237,7 +232,7 @@ public class ChatListener implements Listener {
             }.runTaskLater(plugin, 2); // 2 тика = 100мс при 20 TPS
         } else {
             // Все части отправлены, сохраняем в историю
-            plugin.getStorageService().addToHistory(chatId, "Псич", fullResponse);
+            plugin.getStorageService().addToHistory(chatId, plugin.getConfigManager().getBotName(), fullResponse);
         }
     }
 
@@ -271,9 +266,10 @@ public class ChatListener implements Listener {
 
             // Если сообщение только триггер, добавляем контекст
             String processedMessage = message;
+            String botName = plugin.getConfigManager().getBotName();
             if (message.trim().equalsIgnoreCase(plugin.getConfigManager().getTrigger()) ||
                     message.trim().equalsIgnoreCase("psych")) {
-                processedMessage = "Псич, привет! Что нужно?";
+                processedMessage = botName + ", привет! Что нужно?";
             }
 
             // Генерируем ответ
@@ -361,8 +357,9 @@ public class ChatListener implements Listener {
             e.printStackTrace();
 
             // Отправляем сообщение об ошибке
+            final String botName = plugin.getConfigManager().getBotName();
             final String errorColorCode = plugin.getConfigManager().getNameColorCode();
-            final String errorPrefix = plugin.getConfigManager().isSendAsPlayer() ? "<Псич>" : "[Псич]";
+            final String errorPrefix = plugin.getConfigManager().isSendAsPlayer() ? "<" + botName + ">" : "[" + botName + "]";
             final String errorMessage = errorColorCode + errorPrefix
                     + " §7У меня шестеренки встали. Какая-то дичь в коде";
             new BukkitRunnable() {

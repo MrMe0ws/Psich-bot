@@ -385,7 +385,7 @@ public class GameEventListener implements Listener {
 
             // Сохраняем событие и ответ в историю
             plugin.getStorageService().addToHistory(chatId, playerName, eventContext);
-            plugin.getStorageService().addToHistory(chatId, "Псич", response);
+            plugin.getStorageService().addToHistory(chatId, plugin.getConfigManager().getBotName(), response);
 
         } catch (Exception e) {
             plugin.getLogger().severe("Ошибка обработки события: " + e.getMessage());
@@ -452,20 +452,13 @@ public class GameEventListener implements Listener {
         }
 
         // Формируем сообщение
+        String botName = plugin.getConfigManager().getBotName();
         String colorCode = plugin.getConfigManager().getNameColorCode();
         String messageToSend;
         if (plugin.getConfigManager().isSendAsPlayer()) {
-            if (partNumber == 1) {
-                messageToSend = colorCode + "<Псич> §f" + part;
-            } else {
-                messageToSend = colorCode + "<Псич> §7(продолжение) §f" + part;
-            }
+            messageToSend = colorCode + "<" + botName + "> §f" + part;
         } else {
-            if (partNumber == 1) {
-                messageToSend = colorCode + "[Псич] §f" + part;
-            } else {
-                messageToSend = colorCode + "[Псич] §7(продолжение) §f" + part;
-            }
+            messageToSend = colorCode + "[" + botName + "] §f" + part;
         }
 
         // Отправляем в игру
@@ -475,7 +468,8 @@ public class GameEventListener implements Listener {
         if (plugin.getConfigManager().isDiscordEnabled()
                 && !plugin.getConfigManager().getDiscordWebhookUrl().isEmpty()) {
             String cleanMessage = messageToSend.replaceAll("§[0-9a-fk-or]", "");
-            final String discordMessage = cleanMessage.replaceAll("^\\s*[<\\[]Псич[>\\]]\\s*", "").trim();
+            String botNameEscaped = botName.replaceAll("[\\[\\]<>]", "\\\\$0"); // Экранируем для regex
+            final String discordMessage = cleanMessage.replaceAll("^\\s*[<\\[]" + botNameEscaped + "[>\\]]\\s*", "").trim();
             plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
                 DiscordWebhookIntegration.sendMessage(
                         plugin.getConfigManager().getDiscordWebhookUrl(),

@@ -16,8 +16,9 @@ public class PsichCommand implements CommandExecutor {
     
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        String botName = plugin.getConfigManager().getBotName();
         if (args.length == 0) {
-            sender.sendMessage("§e[Псич] §7Используй: /psich help");
+            sender.sendMessage("§e[" + botName + "] §7Используй: /psich help");
             return true;
         }
         
@@ -33,17 +34,18 @@ public class PsichCommand implements CommandExecutor {
             case "reset":
                 return handleReset(sender);
             default:
-                sender.sendMessage("§e[Псич] §7Неизвестная команда. Используй: /psich help");
+                sender.sendMessage("§e[" + botName + "] §7Неизвестная команда. Используй: /psich help");
                 return true;
         }
     }
     
     private boolean handleHelp(CommandSender sender) {
-        sender.sendMessage("§6=== Помощь по боту Псич ===");
+        String botName = plugin.getConfigManager().getBotName();
+        sender.sendMessage("§6=== Помощь по боту " + botName + " ===");
         sender.sendMessage("§e/psich help §7- Показать эту справку");
         sender.sendMessage("");
         sender.sendMessage("§6Как общаться с ботом:");
-        sender.sendMessage("§7• Напиши в чат: §eПсич, [твое сообщение]");
+        sender.sendMessage("§7• Напиши в чат: §e" + botName + ", [твое сообщение]");
         sender.sendMessage("");
         if (sender.hasPermission("psich.admin")) {
             sender.sendMessage("§cАдминистративные команды:");
@@ -55,8 +57,9 @@ public class PsichCommand implements CommandExecutor {
     }
     
     private boolean handleMute(CommandSender sender) {
+        String botName = plugin.getConfigManager().getBotName();
         if (!sender.hasPermission("psich.admin")) {
-            sender.sendMessage("§c[Псич] §7У вас нет прав на использование этой команды.");
+            sender.sendMessage("§c[" + botName + "] §7У вас нет прав на использование этой команды.");
             return true;
         }
         
@@ -64,30 +67,32 @@ public class PsichCommand implements CommandExecutor {
         plugin.getStorageService().toggleMute(chatId);
         boolean isMuted = plugin.getStorageService().isMuted(chatId);
         
-        sender.sendMessage("§e[Псич] §7" + (isMuted ? "Окей молчу" : "Я тут"));
+        sender.sendMessage("§e[" + botName + "] §7" + (isMuted ? "Окей молчу" : "Я тут"));
         return true;
     }
     
     private boolean handleReload(CommandSender sender) {
+        String botName = plugin.getConfigManager().getBotName();
         if (!sender.hasPermission("psich.admin")) {
-            sender.sendMessage("§c[Псич] §7У вас нет прав на использование этой команды.");
+            sender.sendMessage("§c[" + botName + "] §7У вас нет прав на использование этой команды.");
             return true;
         }
         
         plugin.reload();
-        sender.sendMessage("§e[Псич] §7Конфигурация перезагружена!");
+        sender.sendMessage("§e[" + botName + "] §7Конфигурация перезагружена!");
         return true;
     }
     
     private boolean handleReset(CommandSender sender) {
+        String botName = plugin.getConfigManager().getBotName();
         if (!sender.hasPermission("psich.admin")) {
-            sender.sendMessage("§c[Псич] §7У вас нет прав на использование этой команды.");
+            sender.sendMessage("§c[" + botName + "] §7У вас нет прав на использование этой команды.");
             return true;
         }
         
         String chatId = "global";
         plugin.getStorageService().clearHistory(chatId);
-        sender.sendMessage("§e[Псич] §7Окей, всё забыл, ну было и было");
+        sender.sendMessage("§e[" + botName + "] §7Окей, всё забыл, ну было и было");
         return true;
     }
 }

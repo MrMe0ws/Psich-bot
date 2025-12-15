@@ -37,6 +37,9 @@ chat:
   # Минимальная длина сообщения для спонтанного ответа
   min-message-length: 10
 
+  # Имя бота в чате (используется в сообщениях типа "<Имя> сообщение" или "[Имя] сообщение")
+  bot-name: "Псич"
+
   # Цвет ника Псича в чате (можно использовать: black, dark_blue, dark_green, dark_aqua, dark_red, dark_purple, gold, gray, dark_gray, blue, green, aqua, red, light_purple, yellow, white)
   # Или можно использовать код цвета напрямую: §e (желтый), §c (красный), §a (зеленый) и т.д.
   name-color: "green"

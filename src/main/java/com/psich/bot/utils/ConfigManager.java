@@ -21,6 +21,7 @@ public class ConfigManager {
     private double spontaneousChanceDeath;
     private int contextSize;
     private int minMessageLength;
+    private String botName;
     private String systemPrompt;
     private String nameColor;
     private boolean sendAsPlayer;
@@ -71,6 +72,7 @@ public class ConfigManager {
         }
         contextSize = config.getInt("chat.context-size", 20);
         minMessageLength = config.getInt("chat.min-message-length", 10);
+        botName = config.getString("chat.bot-name", "Псич");
         nameColor = config.getString("chat.name-color", "yellow");
         sendAsPlayer = config.getBoolean("chat.send-as-player", false);
         responseDelay = config.getDouble("chat.response-delay", 1.5);
@@ -167,6 +169,10 @@ public class ConfigManager {
 
     public int getMinMessageLength() {
         return minMessageLength;
+    }
+
+    public String getBotName() {
+        return botName;
     }
 
     public String getSystemPrompt() {

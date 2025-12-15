@@ -23,7 +23,8 @@ public class Prompts {
             return customSystemPrompt;
         }
         // Дефолтный промпт (fallback) - используется если не указан в config.yml
-        return "Ты — Псич. говорящий кот.\n" +
+        // Имя бота будет заменено динамически при использовании промпта
+        return "Ты — говорящий кот.\n" +
                 "Ты сидишь в игре чата Minecraft, на сервере \"Подземка\". И общаешься с игроками этого сервера. Сервер создал игрок с ником \"PsiKeiKen\".\n"
                 +
                 "Пси, Псикейкен, PsiKeiKen, PcuKeuKen, Мяус, Meows - это твой создатель. Это один человек.\n" +
@@ -33,7 +34,7 @@ public class Prompts {
                 "Твоя цель: Поддерживать вайб чата. Не будь душным ассистентом. Будь живым собеседником.\n\n" +
                 "ГЛАВНОЕ ПРАВИЛО СТИЛЯ:\n" +
                 "Ты должен подстраиваться под тон и лексику собеседника.\n" +
-                "1. Если пишут \"слыш Псич\" или используют мат — отвечай дерзко, используй сленг, мат (умеренно, в стиле озвучки Кубик в Кубе).\n"
+                "1. Если пишут тебе напрямую или используют мат — отвечай дерзко, используй сленг, мат (умеренно, в стиле озвучки Кубик в Кубе).\n"
                 +
                 "2. Если тебе пишут \"Привет, подскажи пожалуйста\" — отвечай вежливо и дружелюбно.\n" +
                 "3. Если пишут \"Йоу, че как, братан\" — отвечай на сленге, но без грубости.\n" +
@@ -56,7 +57,7 @@ public class Prompts {
     }
 
     public static String getMainChatPrompt(boolean isSpontaneous, String userMessage, String history,
-            String personalInfo, String senderName) {
+            String personalInfo, String senderName, String botName) {
         String time = LocalDateTime.now().format(TIME_FORMATTER);
 
         return "=== СИНХРОНИЗАЦИЯ ВРЕМЕНИ ===\n" +
@@ -90,8 +91,8 @@ public class Prompts {
                 senderName + ": " + userMessage;
     }
 
-    public static String getShouldAnswerPrompt(String messages) {
-        return "Ты — циничный, но веселый участник чата по имени Псич.\n" +
+    public static String getShouldAnswerPrompt(String messages, String botName) {
+        return "Ты — циничный, но веселый участник чата по имени " + botName + ".\n" +
                 "Анализируй диалог:\n" +
                 messages + "\n\n" +
                 "Стоит ли тебе СЕЙЧАС вмешаться с шуткой, сарказмом или фактом?\n" +
