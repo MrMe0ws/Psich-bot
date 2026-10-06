@@ -110,12 +110,13 @@
 - Системный промпт (личность бота)
 - Время на сервере
 
-**Выбор AI провайдера:**
-1. **Groq** (llama-3.3-70b) - основной
-2. **Gemini** (gemini-2.0-flash-exp) - резерв
-3. **Gemma** (gemma-3-27b) - простой fallback
-4. **Groq-Simple** (llama-3.1-8b) - простой fallback
-5. **DeepSeek** - последний вариант (платный)
+**Выбор AI провайдера** (порядок - `ai.priority`, модели - `ai.models` в конфиге):
+1. **Custom** (любой OpenAI-совместимый API) - если включен
+2. **Groq** (llama-3.3-70b-versatile) - основной
+3. **Gemini** (gemini-flash-latest) - резерв
+4. **Gemma** (gemma-4-26b-a4b-it) - простой fallback
+5. **Groq-Simple** (llama-3.1-8b-instant) - простой fallback
+6. **DeepSeek** (deepseek-flash) - последний вариант (платный)
 
 **Fallback логика:**
 - Если провайдер недоступен → переключение на следующий

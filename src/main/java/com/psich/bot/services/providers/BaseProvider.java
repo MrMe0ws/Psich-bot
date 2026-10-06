@@ -43,6 +43,14 @@ public abstract class BaseProvider {
         return newIndex != oldIndex;
     }
     
+    /**
+     * true - системный промпт передается отдельным сообщением (role: system),
+     * false - системный промпт добавляется в начало текста запроса
+     */
+    public boolean usesSystemMessage() {
+        return false;
+    }
+
     public abstract boolean supportsVision();
     public abstract boolean supportsSearch();
     public abstract String generate(String prompt, GenerateOptions options) throws Exception;

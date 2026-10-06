@@ -22,31 +22,40 @@ public class AIManager {
         // Устанавливаем промпт из конфига
         Prompts.setSystemPrompt(config.getSystemPrompt());
 
-        // Инициализируем провайдеры
+        // Инициализируем провайдеры (модели берутся из ai.models в конфиге)
+        java.util.logging.Logger logger = JavaPlugin.getPlugin(com.psich.bot.PsichBot.class).getLogger();
+
+        if (config.isCustomEnabled()) {
+            providers.add(new OpenAICompatibleProvider("Custom", config.getCustomApiUrl(), config.getCustomModel(),
+                    config.getCustomKeys(), config.isCustomJsonMode(), config));
+            logger.info("Custom провайдер инициализирован: " + config.getCustomModel() + " ("
+                    + config.getCustomApiUrl() + ")");
+        }
+
         if (!config.getGeminiKeys().isEmpty()) {
             providers.add(new GeminiProvider(config.getGeminiKeys(), config));
             // Добавляем Gemma (использует те же ключи что и Gemini)
             providers.add(new GemmaProvider(config.getGeminiKeys(), config));
-            JavaPlugin.getPlugin(com.psich.bot.PsichBot.class).getLogger()
-                    .info("Gemini провайдер инициализирован с " + config.getGeminiKeys().size() + " ключами");
-            JavaPlugin.getPlugin(com.psich.bot.PsichBot.class).getLogger()
-                    .info("Gemma провайдер инициализирован с " + config.getGeminiKeys().size() + " ключами");
+            logger.info("Gemini провайдер инициализирован с " + config.getGeminiKeys().size() + " ключами (модель "
+                    + config.getGeminiModel() + ")");
+            logger.info("Gemma провайдер инициализирован с " + config.getGeminiKeys().size() + " ключами (модель "
+                    + config.getGemmaModel() + ")");
         }
 
         if (!config.getGroqKeys().isEmpty()) {
             providers.add(new GroqProvider(config.getGroqKeys(), config));
             // Добавляем простую модель Groq для fallback
             providers.add(new GroqProvider(config.getGroqKeys(), true, config));
-            JavaPlugin.getPlugin(com.psich.bot.PsichBot.class).getLogger()
-                    .info("Groq провайдер инициализирован с " + config.getGroqKeys().size() + " ключами");
-            JavaPlugin.getPlugin(com.psich.bot.PsichBot.class).getLogger()
-                    .info("Groq-Simple провайдер инициализирован с " + config.getGroqKeys().size() + " ключами");
+            logger.info("Groq провайдер инициализирован с " + config.getGroqKeys().size() + " ключами (модель "
+                    + config.getGroqModel() + ")");
+            logger.info("Groq-Simple провайдер инициализирован с " + config.getGroqKeys().size()
+                    + " ключами (модель " + config.getGroqSimpleModel() + ")");
         }
 
         if (!config.getDeepseekKeys().isEmpty()) {
             providers.add(new DeepSeekProvider(config.getDeepseekKeys(), config));
-            JavaPlugin.getPlugin(com.psich.bot.PsichBot.class).getLogger()
-                    .info("DeepSeek провайдер инициализирован с " + config.getDeepseekKeys().size() + " ключами");
+            logger.info("DeepSeek провайдер инициализирован с " + config.getDeepseekKeys().size()
+                    + " ключами (модель " + config.getDeepseekModel() + ")");
         }
 
         // Логируем статус прокси
@@ -80,23 +89,33 @@ public class AIManager {
             }
         }
 
-        // Для обычного общения - приоритет: Groq > Gemini > Gemma > Groq-Simple >
-        // DeepSeek (платный, в крайнем случае)
-        String[] priorityOrder = { "Groq", "Gemini", "Gemma", "Groq-Simple", "DeepSeek" };
-
-        for (String priorityName : priorityOrder) {
-            for (BaseProvider provider : providers) {
-                if (provider.getName().equals(priorityName) && provider.isAvailable()) {
-                    return provider;
-                }
-            }
-        }
-
-        // Если ничего не нашли, берем любой доступный
-        return providers.stream()
+        // Для обычного общения - порядок из ai.priority (по умолчанию:
+        // Custom > Groq > Gemini > Gemma > Groq-Simple > DeepSeek)
+        return orderedProviders(config.getProviderPriority()).stream()
                 .filter(BaseProvider::isAvailable)
                 .findFirst()
                 .orElse(null);
+    }
+
+    /**
+     * Возвращает провайдеры в указанном порядке. Провайдеры, которых нет в
+     * списке, идут в конце
+     */
+    private List<BaseProvider> orderedProviders(List<String> priority) {
+        List<BaseProvider> ordered = new ArrayList<>();
+        for (String priorityName : priority) {
+            for (BaseProvider provider : providers) {
+                if (provider.getName().equalsIgnoreCase(priorityName.trim()) && !ordered.contains(provider)) {
+                    ordered.add(provider);
+                }
+            }
+        }
+        for (BaseProvider provider : providers) {
+            if (!ordered.contains(provider)) {
+                ordered.add(provider);
+            }
+        }
+        return ordered;
     }
 
     private String executeWithFallback(ProviderTask task, boolean requiresVision, boolean requiresSearch)
@@ -123,13 +142,13 @@ public class AIManager {
             }
             return result;
         } catch (Exception error) {
-            String errorMsg = error.getMessage();
+            String errorMsg = error.getMessage() != null ? error.getMessage() : error.toString();
             boolean isQuotaExhausted = errorMsg.contains("429") ||
                     errorMsg.contains("quota") ||
                     errorMsg.contains("limit") ||
                     errorMsg.contains("402") ||
                     errorMsg.contains("Insufficient");
-            boolean isProxyError = errorMsg != null && (errorMsg.contains("Proxy error") ||
+            boolean isProxyError = (errorMsg.contains("Proxy error") ||
                     errorMsg.contains("403") && errorMsg.contains("CONNECT") ||
                     errorMsg.contains("Connection refused") ||
                     errorMsg.contains("timeout") ||
@@ -151,74 +170,36 @@ public class AIManager {
                         .warning(preferredProvider.getName() + " недоступен");
             }
 
-            // Пробуем других провайдеров (сначала основные, потом простые, DeepSeek в
-            // последнюю очередь)
-            String[] fallbackOrder = { "Groq", "Gemini", "Gemma", "Groq-Simple", "DeepSeek" };
-
-            for (String providerName : fallbackOrder) {
-                for (BaseProvider provider : providers) {
-                    if (provider == preferredProvider)
-                        continue;
-                    if (!provider.isAvailable())
-                        continue;
-                    if (!provider.getName().equals(providerName))
-                        continue;
-
-                    // Пропускаем если не подходит по фичам
-                    if (requiresVision && !provider.supportsVision())
-                        continue;
-
-                    try {
-                        if (config.isDebug()) {
-                            JavaPlugin.getPlugin(com.psich.bot.PsichBot.class).getLogger()
-                                    .info("[DEBUG] Переключаюсь на " + provider.getName() + " (fallback)");
-                        }
-                        String result = task.execute(provider);
-                        if (config.isDebug()) {
-                            JavaPlugin.getPlugin(com.psich.bot.PsichBot.class).getLogger()
-                                    .info("[DEBUG] Успешно получен ответ от " + provider.getName()
-                                            + " (fallback), длина: " + (result != null ? result.length() : 0)
-                                            + " символов");
-                        }
-                        return result;
-                    } catch (Exception fallbackError) {
-                        String fallbackErrorMsg = fallbackError.getMessage();
-                        if (config.isDebug()) {
-                            JavaPlugin.getPlugin(com.psich.bot.PsichBot.class).getLogger()
-                                    .warning("[DEBUG] " + provider.getName() + " (fallback) ошибка: "
-                                            + fallbackErrorMsg);
-                        }
-                        continue;
-                    }
-                }
-            }
-
-            // Если все основные провайдеры исчерпаны, пробуем простые модели
-            for (BaseProvider provider : providers) {
+            // Пробуем остальных провайдеров в порядке ai.priority
+            for (BaseProvider provider : orderedProviders(config.getProviderPriority())) {
                 if (provider == preferredProvider)
                     continue;
                 if (!provider.isAvailable())
                     continue;
-                if (provider.getName().contains("Simple") || provider.getName().equals("Gemma")) {
-                    // Пропускаем если не подходит по фичам
-                    if (requiresVision && !provider.supportsVision())
-                        continue;
 
-                    try {
-                        if (config.isDebug()) {
-                            JavaPlugin.getPlugin(com.psich.bot.PsichBot.class).getLogger()
-                                    .info("[DEBUG] Переключаюсь на простую модель " + provider.getName()
-                                            + " (последний fallback)");
-                        }
-                        return task.execute(provider);
-                    } catch (Exception fallbackError) {
-                        String fallbackErrorMsg = fallbackError.getMessage();
-                        if (config.isDebug()) {
-                            JavaPlugin.getPlugin(com.psich.bot.PsichBot.class).getLogger()
-                                    .warning("[DEBUG] " + provider.getName() + " (последний fallback) ошибка: "
-                                            + fallbackErrorMsg);
-                        }
-                        continue;
+                // Пропускаем если не подходит по фичам
+                if (requiresVision && !provider.supportsVision())
+                    continue;
+
+                try {
+                    if (config.isDebug()) {
+                        JavaPlugin.getPlugin(com.psich.bot.PsichBot.class).getLogger()
+                                .info("[DEBUG] Переключаюсь на " + provider.getName() + " (fallback)");
+                    }
+                    String result = task.execute(provider);
+                    if (config.isDebug()) {
+                        JavaPlugin.getPlugin(com.psich.bot.PsichBot.class).getLogger()
+                                .info("[DEBUG] Успешно получен ответ от " + provider.getName()
+                                        + " (fallback), длина: " + (result != null ? result.length() : 0)
+                                        + " символов");
+                    }
+                    return result;
+                } catch (Exception fallbackError) {
+                    String fallbackErrorMsg = fallbackError.getMessage();
+                    if (config.isDebug()) {
+                        JavaPlugin.getPlugin(com.psich.bot.PsichBot.class).getLogger()
+                                .warning("[DEBUG] " + provider.getName() + " (fallback) ошибка: "
+                                        + fallbackErrorMsg);
                     }
                 }
             }
@@ -316,8 +297,8 @@ public class AIManager {
             options.setTemperature(0.9);
             options.setRequiresSearch(requiresSearch);
 
-            // Для Groq и DeepSeek используем системный промпт в опциях
-            if (provider.getName().equals("Groq") || provider.getName().equals("DeepSeek")) {
+            // Для OpenAI-совместимых API (Groq, DeepSeek, Custom) используем системный промпт в опциях
+            if (provider.usesSystemMessage()) {
                 String result = provider.generate(fullPrompt, options);
                 // Если AI не уложился в лимит, обрезаем (но лучше чтобы AI сам адаптировался)
                 if (requiresSearch && result.length() > 510) {
@@ -353,22 +334,11 @@ public class AIManager {
     /**
      * Выбирает простой (дешевый) провайдер для легких задач (YES/NO, реакции и
      * т.д.)
-     * Приоритет: Gemma > Groq-Simple > Groq > Gemini > DeepSeek
+     * Приоритет по умолчанию: Gemma > Groq-Simple > Custom > Groq > Gemini > DeepSeek
      */
     private BaseProvider selectSimpleProvider() {
-        // Для простых задач используем дешевые модели сначала
-        String[] simplePriorityOrder = { "Gemma", "Groq-Simple", "Groq", "Gemini", "DeepSeek" };
-
-        for (String priorityName : simplePriorityOrder) {
-            for (BaseProvider provider : providers) {
-                if (provider.getName().equals(priorityName) && provider.isAvailable()) {
-                    return provider;
-                }
-            }
-        }
-
-        // Если ничего не нашли, берем любой доступный
-        return providers.stream()
+        // Для простых задач используем дешевые модели сначала (порядок из ai.simple-priority)
+        return orderedProviders(config.getSimpleProviderPriority()).stream()
                 .filter(BaseProvider::isAvailable)
                 .findFirst()
                 .orElse(null);

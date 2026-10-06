@@ -15,7 +15,7 @@ public class PsichBot extends JavaPlugin {
     private static PsichBot instance;
     private ConfigManager configManager;
     private StorageService storageService;
-    private AIManager aiManager;
+    private volatile AIManager aiManager; // пересоздается при /psich reload, читается из async задач
     private DiscordSRVIntegration discordSRVIntegration;
     
     @Override
@@ -76,8 +76,9 @@ public class PsichBot extends JavaPlugin {
     public void reload() {
         reloadConfig();
         configManager.reload();
-        // Обновляем промпт в Prompts
-        com.psich.bot.utils.Prompts.setSystemPrompt(configManager.getSystemPrompt());
+        // Пересоздаем AI провайдеры, чтобы применились новые ключи и модели
+        // (заодно обновляется промпт в Prompts)
+        aiManager = new AIManager(configManager);
         getLogger().info("Конфигурация перезагружена!");
     }
 }

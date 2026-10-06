@@ -14,6 +14,19 @@ public class ConfigManager {
     private List<String> geminiKeys;
     private List<String> groqKeys;
     private List<String> deepseekKeys;
+    private String geminiModel;
+    private String gemmaModel;
+    private String groqModel;
+    private String groqSimpleModel;
+    private String deepseekModel;
+    private String googleThinkingLevel;
+    private boolean customEnabled;
+    private String customApiUrl;
+    private String customModel;
+    private List<String> customKeys;
+    private boolean customJsonMode;
+    private List<String> providerPriority;
+    private List<String> simpleProviderPriority;
     private String trigger;
     private double spontaneousChanceMessage;
     private double spontaneousChanceJoinQuit;
@@ -54,6 +67,40 @@ public class ConfigManager {
         geminiKeys = config.getStringList("ai.gemini-keys");
         groqKeys = config.getStringList("ai.groq-keys");
         deepseekKeys = config.getStringList("ai.deepseek-keys");
+
+        // Загружаем модели (если в старом конфиге секции нет - используются значения по умолчанию)
+        geminiModel = getNonEmptyString("ai.models.gemini", "gemini-flash-latest");
+        gemmaModel = getNonEmptyString("ai.models.gemma", "gemma-4-26b-a4b-it");
+        groqModel = getNonEmptyString("ai.models.groq", "llama-3.3-70b-versatile");
+        groqSimpleModel = getNonEmptyString("ai.models.groq-simple", "llama-3.1-8b-instant");
+        deepseekModel = getNonEmptyString("ai.models.deepseek", "deepseek-flash");
+        googleThinkingLevel = config.getString("ai.models.google-thinking-level", "minimal").trim();
+
+        // Загружаем свой OpenAI-совместимый провайдер
+        customEnabled = config.getBoolean("ai.custom.enabled", false);
+        customApiUrl = config.getString("ai.custom.api-url", "").trim();
+        customModel = config.getString("ai.custom.model", "").trim();
+        customKeys = new ArrayList<>(config.getStringList("ai.custom.keys"));
+        customKeys.removeIf(ConfigManager::isPlaceholderKey);
+        // Для локальных моделей (Ollama, LM Studio) ключ не нужен - работаем без него
+        if (customKeys.isEmpty()) {
+            customKeys.add("");
+        }
+        customJsonMode = config.getBoolean("ai.custom.json-mode", false);
+        if (customEnabled && (customApiUrl.isEmpty() || customModel.isEmpty())) {
+            plugin.getLogger().warning("ai.custom включен, но не указан api-url или model - провайдер отключен");
+            customEnabled = false;
+        }
+
+        // Порядок использования провайдеров
+        providerPriority = config.getStringList("ai.priority");
+        if (providerPriority.isEmpty()) {
+            providerPriority = List.of("Custom", "Groq", "Gemini", "Gemma", "Groq-Simple", "DeepSeek");
+        }
+        simpleProviderPriority = config.getStringList("ai.simple-priority");
+        if (simpleProviderPriority.isEmpty()) {
+            simpleProviderPriority = List.of("Gemma", "Groq-Simple", "Custom", "Groq", "Gemini", "DeepSeek");
+        }
 
         // Загружаем настройки чата
         trigger = config.getString("chat.trigger", "псич");
@@ -100,15 +147,25 @@ public class ConfigManager {
 
         // Фильтруем пустые ключи
         geminiKeys = new ArrayList<>(geminiKeys);
-        geminiKeys.removeIf(String::isEmpty);
+        geminiKeys.removeIf(ConfigManager::isPlaceholderKey);
         groqKeys = new ArrayList<>(groqKeys);
-        groqKeys.removeIf(String::isEmpty);
+        groqKeys.removeIf(ConfigManager::isPlaceholderKey);
         deepseekKeys = new ArrayList<>(deepseekKeys);
-        deepseekKeys.removeIf(String::isEmpty);
+        deepseekKeys.removeIf(ConfigManager::isPlaceholderKey);
 
         plugin.getLogger().info("Загружено ключей Gemini: " + geminiKeys.size());
         plugin.getLogger().info("Загружено ключей Groq: " + groqKeys.size());
         plugin.getLogger().info("Загружено ключей DeepSeek: " + deepseekKeys.size());
+    }
+
+    private String getNonEmptyString(String path, String def) {
+        String value = config.getString(path, def);
+        return value == null || value.trim().isEmpty() ? def : value.trim();
+    }
+
+    // Пустые ключи и заглушки из конфига по умолчанию ("YOUR_..._KEY_HERE") не считаются ключами
+    private static boolean isPlaceholderKey(String key) {
+        return key == null || key.trim().isEmpty() || key.trim().startsWith("YOUR_");
     }
 
     public List<String> getGeminiKeys() {
@@ -121,6 +178,62 @@ public class ConfigManager {
 
     public List<String> getDeepseekKeys() {
         return deepseekKeys;
+    }
+
+    public String getGeminiModel() {
+        return geminiModel;
+    }
+
+    public String getGemmaModel() {
+        return gemmaModel;
+    }
+
+    public String getGroqModel() {
+        return groqModel;
+    }
+
+    public String getGroqSimpleModel() {
+        return groqSimpleModel;
+    }
+
+    public String getDeepseekModel() {
+        return deepseekModel;
+    }
+
+    /**
+     * Уровень размышлений для моделей Google (minimal, low, medium, high).
+     * Пустая строка - параметр не отправляется
+     */
+    public String getGoogleThinkingLevel() {
+        return googleThinkingLevel;
+    }
+
+    public boolean isCustomEnabled() {
+        return customEnabled;
+    }
+
+    public String getCustomApiUrl() {
+        return customApiUrl;
+    }
+
+    public String getCustomModel() {
+        return customModel;
+    }
+
+    public List<String> getCustomKeys() {
+        return customKeys;
+    }
+
+    public boolean isCustomJsonMode() {
+        return customJsonMode;
+    }
+
+    public List<String> getProviderPriority() {
+        return providerPriority;
+    }
+
+    public List<String> getSimpleProviderPriority() {
+        return simpleProviderPriority;
     }
 
     public String getTrigger() {
